@@ -11,16 +11,16 @@ import pyaudio
 # notes to MIDI numbers: https://www.inspiredacoustics.com/en/MIDI_note_numbers_and_center_frequencies
 # FRAME_SIZE and FRAMES_PER_FFT are powers of two
 
-LOWEST_NOTE = 55    # G3
-HIGHEST_NOTE = 96   # C7
-
 SAMPLING_RATE = 22050   # in Hz
 FRAME_SIZE = 2048   # num samples per frame
 FRAMES_PER_FFT = 32 # num frames for FFT to average across
 SAMPLES_PER_FFT = FRAME_SIZE * FRAMES_PER_FFT # increasing this will decrease FREQ_STEP_SIZE and increase resolution but also increase time needed
-FREQ_STEP_SIZE = float(SAMPLING_RATE) / SAMPLES_PER_FFT
+FREQ_STEP_SIZE = float(SAMPLING_RATE) / SAMPLES_PER_FFT # width of FFT bin
 
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+LOWEST_NOTE = 55    # G3
+HIGHEST_NOTE = 96   # C7
 
 def freq_to_midi(f): 
     # add 69, the MIDI number of A4, which is the standard reference note
@@ -38,11 +38,10 @@ def note_to_fftbin(n):
 imin = max(0, int(np.floor(note_to_fftbin(LOWEST_NOTE-1))))
 imax = min(SAMPLES_PER_FFT, int(np.ceil(note_to_fftbin(HIGHEST_NOTE+1))))
 
-# Allocate space to run an FFT. 
+# allocate space to run an FFT
 buf = np.zeros(SAMPLES_PER_FFT, dtype=np.float32)
 num_frames = 0
 
-# Initialize audio
 stream = pyaudio.PyAudio().open(format=pyaudio.paInt16,
                                 channels=1,
                                 rate=SAMPLING_RATE,
@@ -51,14 +50,9 @@ stream = pyaudio.PyAudio().open(format=pyaudio.paInt16,
 
 stream.start_stream()
 
-# Create Hanning window function
+# Hanning window function
 window = 0.5 * (1 - np.cos(np.linspace(0, 2*np.pi, SAMPLES_PER_FFT, False)))
 
-# Print initial text
-print('sampling at', SAMPLING_RATE, 'Hz with max resolution of', FREQ_STEP_SIZE, 'Hz')
-print()
-
-# As long as we are getting data:
 while stream.is_active():
 
     # Shift the buffer down and new data in
