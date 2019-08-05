@@ -2,13 +2,20 @@ from music21 import converter, instrument, note, chord
 import numpy
 import glob
 from keras.utils import np_utils
+import tensorflow
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Activation
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 notes = []
 faulty = ['BachCelloSuite.mid']
+average_len = 0
+file_count = 0
 
 for file in glob.glob("midi_examples/*.mid"):
     midi = converter.parse(file)
     notes_to_parse = []
+    len_before = len(notes)
 
     parts = instrument.partitionByInstrument(midi)
     if parts:  # file has instrument parts
@@ -21,11 +28,16 @@ for file in glob.glob("midi_examples/*.mid"):
             notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
             notes.append('.'.join(str(n) for n in element.normalOrder))
+    len_after = len(notes)
+    file_count += 1
+    if file_count == 1:
+        average_len = len_after - len_before
+    else:
+        average_len += (len_after - len_before) / 2.0
 
 print('data processed')
-print(len(notes))
 
-sequence_length = 50  # dealing with relatively short pieces here
+sequence_length = 100  # dealing with relatively short pieces here
 pitch_names = sorted(set(item for item in notes))
 pitch_to_int = {pitch: index for index, pitch in enumerate(pitch_names)}
 
@@ -53,4 +65,40 @@ network_input = numpy.reshape(
 
 # normalize input
 network_input = network_input / float(num_vocab)
+# one hot output
 network_output = np_utils.to_categorical(network_output)
+
+print('inputs and outputs formatted')
+
+model = Sequential()
+model.add(LSTM(
+    256,
+    input_shape=(network_input.shape[1], network_input.shape[2]),
+    return_sequences=True
+))
+model.add(Dropout(0.3))
+model.add(LSTM(512, return_sequences=True))
+model.add(Dropout(0.3))
+model.add(LSTM(256))
+model.add(Dense(256))
+model.add(Dropout(0.3))
+model.add(Dense(num_vocab))
+model.add(Activation('softmax'))
+model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+
+print('model created')
+
+filepath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"
+checkpoint = ModelCheckpoint(
+    filepath,
+    monitor='loss',
+    verbose=0,
+    save_best_only=True,
+    mode='min'
+)
+callbacks_list = [checkpoint]
+
+model.fit(network_input, network_output, epochs=200,
+          batch_size=64, callbacks=callbacks_list)
+
+print('model trained')
