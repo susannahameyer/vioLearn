@@ -1,14 +1,14 @@
 from music21 import converter, instrument, note, chord
-import numpy
+import numpy as np
 import glob
 from keras.utils import np_utils
 import tensorflow
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Activation
 from tensorflow.keras.callbacks import ModelCheckpoint
+import sys
 
 notes = []
-faulty = ['BachCelloSuite.mid']
 average_len = 0
 file_count = 0
 
@@ -25,9 +25,11 @@ for file in glob.glob("midi_examples/*.mid"):
         notes_to_parse = midi.flat.notes
     for element in notes_to_parse:
         if isinstance(element, note.Note):
-            notes.append(str(element.pitch))
+            notes.append(str(element.pitch) + ',' +
+                         str(element.duration.quarterLength))
         elif isinstance(element, chord.Chord):
-            notes.append('.'.join(str(n) for n in element.normalOrder))
+            chord_id = '.'.join(str(n) for n in element.normalOrder)
+            notes.append(chord_id + ',' + str(element.duration.quarterLength))
     len_after = len(notes)
     file_count += 1
     if file_count == 1:
@@ -37,7 +39,8 @@ for file in glob.glob("midi_examples/*.mid"):
 
 print('data processed')
 
-sequence_length = 100  # dealing with relatively short pieces here
+
+sequence_length = 40  # dealing with relatively short pieces here
 pitch_names = sorted(set(item for item in notes))
 pitch_to_int = {pitch: index for index, pitch in enumerate(pitch_names)}
 
@@ -57,10 +60,9 @@ for i in range(0, len(notes) - sequence_length):
 num_patterns = len(network_input)
 num_vocab = len(set(notes))
 
-
 # reshape the input into a format compatible with LSTM layers
 # resize to (num samples, input shape (sequence_length, 1 (num features)))
-network_input = numpy.reshape(
+network_input = np.reshape(
     network_input, (num_patterns, sequence_length, 1))
 
 # normalize input
@@ -88,7 +90,7 @@ model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
 print('model created')
 
-filepath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"
+filepath = "weights/weights-{epoch:02d}-{loss:.4f}.hdf5"
 checkpoint = ModelCheckpoint(
     filepath,
     monitor='loss',
